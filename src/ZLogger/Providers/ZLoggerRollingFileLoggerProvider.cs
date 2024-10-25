@@ -17,6 +17,14 @@ public sealed class ZLoggerRollingFileOptions : ZLoggerFileOptions
     public Func<DateTimeOffset, int, string>? FilePathSelector { get; set; }
     public RollingInterval RollingInterval { get; set; } = RollingInterval.Day;
     public int RollingSizeKB { get; set; } = 512 * 1024;
+    public Action<PreviousFileRollingInfo> AfterPreviousFileWasClosed { get; set; } = info => { };
+}
+
+public sealed class PreviousFileRollingInfo   
+{
+    public string FilePath { get; set; }
+    public int FileSizeKB { get; set; }
+    public int Index { get; set; }
 }
 
 [ProviderAlias("ZLoggerRollingFile")]
@@ -33,7 +41,7 @@ public class ZLoggerRollingFileLoggerProvider : ILoggerProvider, ISupportExterna
             throw new ArgumentException(nameof(options.FilePathSelector));
         }
         this.options = options;
-        var stream = new RollingFileStream(options.FilePathSelector!, options.RollingInterval, options.RollingSizeKB, options.TimeProvider, options.FileShared);
+        var stream = new RollingFileStream(options.FilePathSelector!, options.RollingInterval, options.RollingSizeKB, options.TimeProvider, options.FileShared, options.AfterPreviousFileWasClosed);
         this.streamWriter = new AsyncStreamLineMessageWriter(stream, this.options);
     }
 

@@ -26,14 +26,19 @@ internal partial class RollingFileStream : Stream
     string fileName;
     Stream? innerStream;
     DateTimeOffset? nextCheckpoint;
+    Action<PreviousFileRollingInfo> fnAfterPreviousFileWasClosed;
 
-    public RollingFileStream(Func<DateTimeOffset, int, string> fileNameSelector, RollingInterval rollInterval, int rollSizeKB, TimeProvider? timeProvider, bool fileShared)
+
+    public RollingFileStream(Func<DateTimeOffset, int, string> fileNameSelector, RollingInterval rollInterval,
+        int rollSizeKB, TimeProvider? timeProvider, bool fileShared,
+        Action<PreviousFileRollingInfo> fnAfterPreviousFileWasClosed)
     {
         this.fileNameSelector = fileNameSelector;
         this.rollInterval = rollInterval;
         this.rollSizeInBytes = (long)rollSizeKB * 1024;
         this.timeProvider = timeProvider;
         this.fileShared = fileShared;
+        this.fnAfterPreviousFileWasClosed = fnAfterPreviousFileWasClosed;
 
         ValidateFileNameSelector();
         TryChangeNewRollingFile();
@@ -68,16 +73,25 @@ internal partial class RollingFileStream : Stream
 
     void TryChangeNewRollingFile()
     {
+
         var now = timeProvider?.GetUtcNow() ?? DateTimeOffset.UtcNow;
         var currentCheckpoint = GetCurrentCheckpoint(now);
 
         // needs to create next file
         if (innerStream == null || currentCheckpoint >= nextCheckpoint || writtenLength >= rollSizeInBytes)
         {
+            var previous = new PreviousFileRollingInfo()
+            {
+                FilePath = fileName,
+                FileSizeKB = writtenLength / 1024,
+                Index = ExtractCurrentSequence(fileName)
+
+
+            };
             var sequenceNo = 0;
             if (innerStream != null && currentCheckpoint < nextCheckpoint)
             {
-                sequenceNo = ExtractCurrentSequence(fileName) + 1;
+                sequenceNo = previous.Index + 1;
             }
 
             string? fn = null;
@@ -109,7 +123,10 @@ internal partial class RollingFileStream : Stream
                 break;
             }
 
-            if (disposed) return;
+            if (disposed){
+               
+                return;
+            }
             try
             {
                 if (innerStream != null)
@@ -122,6 +139,8 @@ internal partial class RollingFileStream : Stream
             {
                 throw new InvalidOperationException("Can't dispose fileStream", ex);
             }
+
+            fnAfterPreviousFileWasClosed(previous);
 
             try
             {
@@ -152,7 +171,8 @@ internal partial class RollingFileStream : Stream
             }
         }
     }
-    
+
+
     DateTimeOffset? GetCurrentCheckpoint(DateTimeOffset instant) => rollInterval switch
     {
         RollingInterval.Infinite => null,
