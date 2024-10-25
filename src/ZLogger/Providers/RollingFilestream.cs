@@ -11,7 +11,7 @@ internal partial class RollingFileStream : Stream
 #else    
     static readonly Regex NumberRegex = new("(\\d)+$", RegexOptions.Compiled);
 #endif
-    
+
 
     readonly Func<DateTimeOffset, int, string> fileNameSelector;
     readonly RollingInterval rollInterval;
@@ -80,17 +80,19 @@ internal partial class RollingFileStream : Stream
         // needs to create next file
         if (innerStream == null || currentCheckpoint >= nextCheckpoint || writtenLength >= rollSizeInBytes)
         {
-            var previous = new PreviousFileRollingInfo()
-            {
-                FilePath = fileName,
-                FileSizeKB = writtenLength / 1024,
-                Index = ExtractCurrentSequence(fileName)
-
-
-            };
+            PreviousFileRollingInfo? previous = null;
             var sequenceNo = 0;
             if (innerStream != null && currentCheckpoint < nextCheckpoint)
             {
+
+                previous = new PreviousFileRollingInfo()
+                {
+                    FilePath = fileName,
+                    FileSizeKB = writtenLength / 1024,
+                    Index = ExtractCurrentSequence(fileName)
+
+
+                };
                 sequenceNo = previous.Index + 1;
             }
 
@@ -123,8 +125,9 @@ internal partial class RollingFileStream : Stream
                 break;
             }
 
-            if (disposed){
-               
+            if (disposed)
+            {
+
                 return;
             }
             try
@@ -140,7 +143,10 @@ internal partial class RollingFileStream : Stream
                 throw new InvalidOperationException("Can't dispose fileStream", ex);
             }
 
-            fnAfterPreviousFileWasClosed(previous);
+            if (previous != null) fnAfterPreviousFileWasClosed(previous);     
+            
+
+           
 
             try
             {

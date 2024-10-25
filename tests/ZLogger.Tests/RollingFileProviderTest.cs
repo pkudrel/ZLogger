@@ -114,6 +114,41 @@ public class RollingFileProviderTest
 
         File.Exists(path2).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task RollBySize2()
+    {
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2000, 1, 2, 3, 4, 5, TimeSpan.Zero));
+                
+        var path1 = Path.Join(directory, $"ZLoggerRollingTest_{timeProvider.GetUtcNow():yyyy-MM-dd}-0.log");
+        var path2 = Path.Join(directory, $"ZLoggerRollingTest_{timeProvider.GetUtcNow():yyyy-MM-dd}-1.log");
+
+        using var loggerFactory = LoggerFactory.Create(x =>
+        {
+            x.SetMinimumLevel(LogLevel.Debug);
+            x.AddZLoggerRollingFile(options =>
+            {
+                options.FilePathSelector = (dt, seq) => Path.Join(directory, $"ZLoggerRollingTest_{dt:yyyy-MM-dd}-{seq}.log");
+                options.RollingInterval = RollingInterval.Day;
+                options.RollingSizeKB = 5;
+                options.TimeProvider = timeProvider;
+                options.AfterPreviousFileWasClosed = info =>
+                {
+                    var a = 1;
+                };
+            });
+        });
+        
+        File.Exists(path1).Should().Be(true);
+        
+        var logger = loggerFactory.CreateLogger("mytest");
+        logger.LogDebug(new string('a', 10000));
+        await Task.Delay(TimeSpan.FromSeconds(1)); // wait for flush
+        logger.LogDebug("tako");
+        await Task.Delay(TimeSpan.FromSeconds(1)); // wait for flush
+
+        File.Exists(path2).Should().BeTrue();
+    }
     
     static StreamReader OpenFile(string path)
     {
